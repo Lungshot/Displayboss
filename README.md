@@ -2,8 +2,8 @@
 
 Save and switch between Windows display configurations with a single click. No more manually enabling/disabling monitors in Display Settings every day.
 
-![License](https://img.shields.io/github/license/Lungshot/DisplayBoss?cacheSeconds=3600)
-![Release](https://img.shields.io/github/v/release/Lungshot/DisplayBoss?cacheSeconds=3600)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Lungshot/DisplayBoss)](https://github.com/Lungshot/DisplayBoss/releases)
 
 ## The Problem
 
