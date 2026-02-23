@@ -15,9 +15,10 @@ SolidCompression=yes
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
-LicenseFile=
 DisableProgramGroupPage=yes
 CloseApplications=force
+; Uncomment and set path when you have a code signing certificate:
+; SignTool=signtool sign /f "$path_to_cert.pfx" /p $password /tr http://timestamp.digicert.com /td sha256 /fd sha256 $f
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -44,12 +45,75 @@ Name: "startupicon"; Description: "Start DisplayBoss with &Windows"; GroupDescri
 Name: "addtopath"; Description: "Add CLI tool to system &PATH"; GroupDescription: "CLI:"
 
 [Run]
+Filename: "{tmp}\windowsdesktop-runtime-8.0-win-x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing .NET 8.0 Desktop Runtime..."; Flags: waituntilterminated; Check: not IsDotNet8DesktopInstalled
 Filename: "{app}\DisplayBoss.exe"; Description: "Launch DisplayBoss"; Flags: nowait postinstall skipifsilent
 
 [Registry]
 Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "Path"; ValueData: "{olddata};{app}"; Tasks: addtopath; Check: NeedsAddPath(ExpandConstant('{app}'))
 
 [Code]
+var
+  DownloadPage: TDownloadWizardPage;
+  DotNetNeeded: Boolean;
+
+function IsDotNet8DesktopInstalled: Boolean;
+var
+  ResultCode: Integer;
+begin
+  // Check via dotnet command for any 8.0.x WindowsDesktop runtime
+  if Exec(ExpandConstant('{cmd}'), '/c dotnet --list-runtimes 2>nul | findstr /C:"Microsoft.WindowsDesktop.App 8.0" >nul', '',
+    SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Result := (ResultCode = 0)
+  else
+    Result := False;
+end;
+
+function OnDownloadProgress(const Url, FileName: String; const Progress, ProgressMax: Int64): Boolean;
+begin
+  if Progress = ProgressMax then
+    Log(Format('Downloaded %s (%d bytes)', [FileName, Progress]));
+  Result := True;
+end;
+
+procedure InitializeWizard;
+begin
+  DotNetNeeded := not IsDotNet8DesktopInstalled;
+
+  DownloadPage := CreateDownloadPage(
+    SetupMessage(msgWizardPreparing),
+    SetupMessage(msgPreparingDesc),
+    @OnDownloadProgress);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+
+  if (CurPageID = wpReady) and DotNetNeeded then
+  begin
+    DownloadPage.Clear;
+    // aka.ms redirect always points to latest 8.0.x runtime
+    DownloadPage.Add(
+      'https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe',
+      'windowsdesktop-runtime-8.0-win-x64.exe', '');
+    DownloadPage.Show;
+    try
+      try
+        DownloadPage.Download;
+      except
+        if DownloadPage.AbortedByUser then
+          Log('Download aborted by user.')
+        else
+          SuppressibleMsgBox(AddPeriod(GetExceptionMessage),
+            mbCriticalError, MB_OK, IDOK);
+        Result := False;
+      end;
+    finally
+      DownloadPage.Hide;
+    end;
+  end;
+end;
+
 function NeedsAddPath(Param: string): boolean;
 var
   OrigPath: string;
